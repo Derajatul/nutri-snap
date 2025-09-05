@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nutri Snap
 
-## Getting Started
+## Description
 
-First, run the development server:
+Nutri Snap adalah web app untuk memperkirakan kalori dan makro dari sebuah foto makanan. Unggah foto, biarkan AI mengenali item makanan, hitung nutrisi per porsi, sesuaikan porsi secara manual, dan bandingkan progres terhadap target personal harian.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Technologies used
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Next.js 15 (App Router) & React 19
+- TypeScript, Tailwind CSS v4
+- UI primitives kustom (Card, Button, Donut, Skeleton, dsb.) dan lucide-react icons
+- Replicate API (IBM Granite Vision 3.3 untuk deteksi; IBM Granite Instruct 3.3 untuk ringkasan/saran)
+- Linter/formatter: Biome
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Upload foto makanan dengan preview
+- Estimasi nutrisi total (kalori, protein, lemak, karbo) dengan visual Donut Chart
+- Donut kalori dan makro memakai target personal sebagai batas (max)
+- Ringkasan dan saran singkat di dalam kartu “Total Nutrition”
+- Edit Manual per item: count, gram per unit (g/unit), dan total gram
+- Kalkulator kebutuhan harian (profil disimpan di localStorage)
+- Skeleton loading untuk pengalaman cepat dan halus
 
-## Learn More
+## Setup instructions
 
-To learn more about Next.js, take a look at the following resources:
+1. Prerequisites
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   - Node.js 20+ dan npm
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. Instalasi
 
-## Deploy on Vercel
+   ```bash
+   npm install
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. Environment variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   Buat file `.env.local` di root proyek:
+
+   ```bash
+   REPLICATE_API_TOKEN=your_replicate_api_token
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
+   ```
+
+   Catatan: REPLICATE_API_TOKEN diperlukan untuk memanggil model IBM Granite via Replicate.
+
+4. Jalankan dalam mode pengembangan
+
+   ```bash
+   npm run dev
+   ```
+
+   Buka <http://localhost:3000>
+
+5. Build untuk produksi (opsional)
+
+   ```bash
+   npm run build
+   npm start
+   ```
+
+## AI support explanation
+
+- Vision: IBM Granite Vision 3.3 (via Replicate) mengubah foto menjadi JSON item makanan (label, bbox, dsb.). Hasil dibersihkan dan dinormalisasi sebelum diproses.
+- Nutrition: Tiap item diperkirakan per 100 g lalu diskalakan sesuai gram aktual/hasil penyesuaian. Total kalori/makro dijumlahkan lintas item.
+- Summary & Advice: IBM Granite Instruct 3.3 (via Replicate) menghasilkan ringkasan dan saran singkat berdasarkan total nutrisi dan catatan.
+- Target Personal: Kalkulator harian (Mifflin–St Jeor × faktor aktivitas) menyimpan profil di localStorage. Donut memakai target ini sebagai batas agar progres mencerminkan tujuan harian.
+- Privasi: Gambar diunggah ke Replicate untuk inferensi model. Aplikasi ini bersifat informatif, bukan nasihat medis.
