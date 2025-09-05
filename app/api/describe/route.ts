@@ -2,7 +2,7 @@ import Replicate from "replicate";
 
 export async function POST(request: Request) {
   try {
-    const token = process.env.VISION_API_TOKEN;
+    const token = process.env.REPLICATE_API_TOKEN;
     if (!token) {
       return new Response("Vision API token not configured", { status: 500 });
     }
