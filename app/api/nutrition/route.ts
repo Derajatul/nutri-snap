@@ -254,6 +254,14 @@ function addMacros(a: Macro, b: Macro): Macro {
   };
 }
 
+// Simple in-memory cache for USDA per-100g results across requests
+// Uses globalThis to persist through hot reloads in dev.
+const gAny = globalThis as any;
+if (!gAny.__USDA_CACHE) {
+  gAny.__USDA_CACHE = new Map<string, Macro | null>();
+}
+const USDA_CACHE: Map<string, Macro | null> = gAny.__USDA_CACHE;
+
 // Helpers to pick best USDA food and extract per 100 g
 function pickBestFood(foods: any[], query: string) {
   const priority = (t?: string) => {
@@ -379,6 +387,20 @@ async function fetchUSDA(label: string) {
   return per100;
 }
 
+async function fetchUSDAWithCache(label: string): Promise<Macro | null> {
+  const key = label.trim().toLowerCase();
+  if (USDA_CACHE.has(key)) return USDA_CACHE.get(key) ?? null;
+  try {
+    const res = await fetchUSDA(label);
+    USDA_CACHE.set(key, res ?? null);
+    return res ?? null;
+  } catch (e) {
+    // Cache negative result to avoid hammering on repeated failures
+    USDA_CACHE.set(key, null);
+    return null;
+  }
+}
+
 // Open Food Facts fallback by barcode
 async function fetchOFFByBarcode(barcode: string): Promise<Macro | null> {
   try {
@@ -421,7 +443,7 @@ export async function POST(req: Request) {
       count?: number;
       per100g: Macro | null;
       estimated: Macro | null;
-    }> = [];
+    }> = new Array(items.length);
 
     let total: Macro = { kcal: 0, protein: 0, fat: 0, carbs: 0 };
 
@@ -499,47 +521,81 @@ export async function POST(req: Request) {
       }
       return null;
     }
-    for (const it of items) {
-      const { base } = estimateGramsBase(it);
-      const inferred = inferCountFromNotes(it, body?.notes ?? "");
-      const count = Math.max(1, Number((it as any).count ?? inferred ?? 1));
-      let gramsPerUnit = base;
-      if (count === 1) {
-        gramsPerUnit = scaleGramsByBBox(
-          it,
-          base,
-          container?.area,
-          container?.type
-        );
+    // Memoize barcode fallback per request to avoid repeated network calls
+    let barcodeMacroPromise: Promise<Macro | null> | null = null;
+    const getBarcodeMacro = () => {
+      if (barcodeMacroPromise) return barcodeMacroPromise;
+      const bc = body?.barcodes?.[0]?.value;
+      if (!bc) {
+        barcodeMacroPromise = Promise.resolve(null);
+      } else {
+        barcodeMacroPromise = fetchOFFByBarcode(bc).catch(() => null);
       }
-      const grams = gramsPerUnit * count;
-      // Build a better query label for USDA using notes when useful
-      let labelForUSDA = it.label;
-      const notes = (body?.notes || "").toLowerCase();
-      if (/\begg\b|\btelur\b/i.test(it.label)) {
-        if (/(sunny\s*side\s*up|fried)/.test(notes)) labelForUSDA = "fried egg";
-        else if (/(boiled|hard\s*boiled|soft\s*boiled)/.test(notes))
-          labelForUSDA = "boiled egg";
-        else if (/scrambled/.test(notes)) labelForUSDA = "scrambled egg";
+      return barcodeMacroPromise;
+    };
+
+    const notesLower = (body?.notes || "").toLowerCase();
+    const tasks = items.map(async (it, idx) => {
+      try {
+        const { base } = estimateGramsBase(it);
+        const inferred = inferCountFromNotes(it, notesLower);
+        const count = Math.max(1, Number((it as any).count ?? inferred ?? 1));
+        let gramsPerUnit = base;
+        if (count === 1) {
+          gramsPerUnit = scaleGramsByBBox(
+            it,
+            base,
+            container?.area,
+            container?.type
+          );
+        }
+        const grams = gramsPerUnit * count;
+
+        // Build a better query label for USDA using notes when useful
+        let labelForUSDA = it.label;
+        if (/\begg\b|\btelur\b/i.test(it.label)) {
+          if (/(sunny\s*side\s*up|fried)/.test(notesLower))
+            labelForUSDA = "fried egg";
+          else if (/(boiled|hard\s*boiled|soft\s*boiled)/.test(notesLower))
+            labelForUSDA = "boiled egg";
+          else if (/scrambled/.test(notesLower)) labelForUSDA = "scrambled egg";
+        }
+
+        let per100g = await fetchUSDAWithCache(labelForUSDA);
+        if (!per100g) per100g = await getBarcodeMacro();
+
+        const estimated = per100g ? scalePer100g(per100g, grams) : null;
+
+        results[idx] = {
+          id: it.id,
+          label: it.label,
+          grams,
+          gramsPerUnit,
+          count,
+          per100g,
+          estimated,
+        };
+      } catch (e) {
+        // Swallow per-item errors so one failure doesn't fail the whole request
+        results[idx] = {
+          id: it.id,
+          label: it.label,
+          grams: 0,
+          gramsPerUnit: undefined,
+          count: (it as any).count ?? undefined,
+          per100g: null,
+          estimated: null,
+        };
       }
-      let per100g = await fetchUSDA(labelForUSDA);
-      // fallback: try first barcode from payload if USDA fails
-      if (!per100g && body?.barcodes?.length) {
-        const bc = body.barcodes[0]?.value;
-        if (bc) per100g = await fetchOFFByBarcode(bc);
-      }
-      const estimated = per100g ? scalePer100g(per100g, grams) : null;
-      if (estimated) total = addMacros(total, estimated);
-      results.push({
-        id: it.id,
-        label: it.label,
-        grams,
-        gramsPerUnit,
-        count,
-        per100g,
-        estimated,
-      });
-    }
+    });
+
+    await Promise.all(tasks);
+
+    // Compute total deterministically after all tasks
+    total = results.reduce(
+      (acc, r) => (r?.estimated ? addMacros(acc, r.estimated) : acc),
+      { kcal: 0, protein: 0, fat: 0, carbs: 0 }
+    );
 
     return NextResponse.json({ items: results, total });
   } catch (e: any) {

@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Donut } from "@/components/ui/donut";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Sanitize messy JSON-like text from model into valid JSON string
 function sanitizeGraniteJson(rawInput: unknown): {
@@ -166,6 +167,8 @@ Schema:
   const [result, setResult] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [nutrition, setNutrition] = React.useState<any | null>(null);
+  const [summary, setSummary] = React.useState<string>("");
+  const [advice, setAdvice] = React.useState<string[]>([]);
   const [adjustedGrams, setAdjustedGrams] = React.useState<
     Record<number, number>
   >({});
@@ -227,6 +230,8 @@ Schema:
       setError(null);
       setResult(null);
       setNutrition(null);
+      setSummary("");
+      setAdvice([]);
       if (!file) {
         setError("Pilih gambar terlebih dahulu");
         return;
@@ -263,6 +268,28 @@ Schema:
             setAdjustedGrams({});
             setAdjustedCount({});
             setAdjustedGPU({});
+            // End loading for UX as soon as nutrition is ready
+            setLoadingPhase("idle");
+            // Kick off summary + advice in the background (non-blocking)
+            (async () => {
+              try {
+                const sumRes = await fetch("/api/describe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    items: nut.items,
+                    notes: (parsed as any)?.notes ?? "",
+                    total: nut.total,
+                  }),
+                });
+                if (sumRes.ok) {
+                  const s = await sumRes.json();
+                  if (s?.summary && typeof s.summary === "string")
+                    setSummary(s.summary);
+                  if (Array.isArray(s?.advice)) setAdvice(s.advice);
+                }
+              } catch {}
+            })();
           } else {
             const t = await nutRes.text();
             console.error("nutrition error:", t);
@@ -276,6 +303,7 @@ Schema:
     } catch (e: any) {
       setError(e?.message || "Terjadi kesalahan");
     } finally {
+      // If nutrition already set the phase to idle above, this will be a no-op
       setLoadingPhase("idle");
     }
   }
@@ -330,6 +358,38 @@ Schema:
 
       {nutrition ? (
         <div className="space-y-4">
+          {summary ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ringkasan</CardTitle>
+                <CardDescription>{summary}</CardDescription>
+              </CardHeader>
+              {advice?.length ? (
+                <CardContent>
+                  <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                    {advice.map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              ) : null}
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ringkasan</CardTitle>
+                <CardDescription>
+                  <Skeleton as="span" className="h-4 w-3/4 align-middle" />
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Skeleton as="span" className="block h-3 w-5/6" />
+                  <Skeleton as="span" className="block h-3 w-2/3" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Total Nutrition</CardTitle>
@@ -522,6 +582,80 @@ Schema:
                       No nutrition match found.
                     </p>
                   )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : loadingPhase !== "idle" ? (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ringkasan</CardTitle>
+              <CardDescription>
+                <Skeleton as="span" className="h-4 w-3/4 align-middle" />
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Skeleton as="span" className="block h-3 w-5/6" />
+                <Skeleton as="span" className="block h-3 w-2/3" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Total Nutrition</CardTitle>
+              <CardDescription>Per estimated portions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="col-span-2 flex items-center gap-4 sm:col-span-1">
+                  <div>
+                    <div className="text-muted-foreground text-sm">
+                      Calories
+                    </div>
+                    <div className="text-lg font-semibold">
+                      <Skeleton className="h-6 w-24" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center">
+                  <Skeleton className="h-24 w-24 rounded-full" />
+                </div>
+                <div className="flex items-center justify-center">
+                  <Skeleton className="h-24 w-24 rounded-full" />
+                </div>
+                <div className="flex items-center justify-center">
+                  <Skeleton className="h-24 w-24 rounded-full" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="grid gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    <Skeleton as="span" className="h-4 w-1/3 align-middle" />
+                  </CardTitle>
+                  <CardDescription>
+                    <Skeleton as="span" className="h-3 w-1/2 align-middle" />
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    {Array.from({ length: 4 }).map((__, j) => (
+                      <div key={j}>
+                        <div className="text-muted-foreground">
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                        <div className="font-medium">
+                          <Skeleton className="h-4 w-20" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             ))}
