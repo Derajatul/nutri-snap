@@ -6,6 +6,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 // Sanitize messy JSON-like text from model into valid JSON string
 function sanitizeGraniteJson(rawInput: unknown): {
@@ -155,12 +162,56 @@ Schema:
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [nutrition, setNutrition] = React.useState<any | null>(null);
+  const [adjustedGrams, setAdjustedGrams] = React.useState<
+    Record<number, number>
+  >({});
+  const [adjustedCount, setAdjustedCount] = React.useState<Record<number, number>>({});
+  const [adjustedGPU, setAdjustedGPU] = React.useState<Record<number, number>>({});
+
+  function recalcNutrition(
+    base: any,
+    gramsOverrides: Record<number, number>,
+    countOverrides?: Record<number, number>,
+    gpuOverrides?: Record<number, number>
+  ) {
+    try {
+      if (!base?.items) return base;
+      const items = base.items.map((it: any) => {
+        const count = Math.max(1, Math.round(countOverrides?.[it.id] ?? it.count ?? 1));
+        const gramsPerUnit = Math.max(0, gpuOverrides?.[it.id] ?? it.gramsPerUnit ?? Math.max(0, it.grams / Math.max(1, it.count || 1)));
+        const grams = gramsOverrides[it.id] ?? gramsPerUnit * count;
+        if (!it.per100g) return { ...it, grams };
+        const f = grams / 100;
+        const estimated = {
+          kcal: it.per100g.kcal * f,
+          protein: it.per100g.protein * f,
+          fat: it.per100g.fat * f,
+          carbs: it.per100g.carbs * f,
+        };
+        return { ...it, grams, gramsPerUnit, count, estimated };
+      });
+      const total = items.reduce(
+        (acc: any, cur: any) => ({
+          kcal: acc.kcal + (cur.estimated?.kcal || 0),
+          protein: acc.protein + (cur.estimated?.protein || 0),
+          fat: acc.fat + (cur.estimated?.fat || 0),
+          carbs: acc.carbs + (cur.estimated?.carbs || 0),
+        }),
+        { kcal: 0, protein: 0, fat: 0, carbs: 0 }
+      );
+      return { ...base, items, total };
+    } catch {
+      return base;
+    }
+  }
 
   async function analyze() {
     try {
       setLoading(true);
       setError(null);
       setResult(null);
+      setNutrition(null);
       if (!file) {
         setError("Pilih gambar terlebih dahulu");
         return;
@@ -176,12 +227,33 @@ Schema:
         const text = await res.text();
         throw new Error(text || "Gagal menganalisis gambar");
       }
-  const data = await res.json();
-  // API returns a JSON-encoded string; sanitize, normalize labels, and pretty print
+      const data = await res.json();
+      // API returns a JSON-encoded string; sanitize, normalize labels, and pretty print
       const { cleaned, parsed } = sanitizeGraniteJson(data);
       if (parsed) {
         const normalized = normalizeGraniteData(parsed);
-        setResult(JSON.stringify(normalized, null, 2));
+        const pretty = JSON.stringify(normalized, null, 2);
+        setResult(pretty);
+        // Trigger nutrition mapping
+        try {
+          const nutRes = await fetch("/api/nutrition", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(normalized),
+          });
+          if (nutRes.ok) {
+            const nut = await nutRes.json();
+            setNutrition(nut);
+            setAdjustedGrams({});
+            setAdjustedCount({});
+            setAdjustedGPU({});
+          } else {
+            const t = await nutRes.text();
+            console.error("nutrition error:", t);
+          }
+        } catch (e) {
+          console.error("nutrition fetch failed", e);
+        }
       } else {
         setResult(cleaned);
       }
@@ -231,6 +303,160 @@ Schema:
         >
           {result}
         </pre>
+      ) : null}
+
+      {nutrition ? (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Total Nutrition</CardTitle>
+              <CardDescription>Per estimated portions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                <div>
+                  <div className="text-muted-foreground">Calories</div>
+                  <div className="font-medium">
+                    {Math.round(nutrition.total.kcal)} kcal
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Protein</div>
+                  <div className="font-medium">
+                    {nutrition.total.protein.toFixed(1)} g
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Fat</div>
+                  <div className="font-medium">
+                    {nutrition.total.fat.toFixed(1)} g
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Carbs</div>
+                  <div className="font-medium">
+                    {nutrition.total.carbs.toFixed(1)} g
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3">
+            {nutrition.items?.map((it: any) => (
+              <Card key={it.id}>
+                <CardHeader>
+                  <CardTitle className="text-base">{it.label}</CardTitle>
+                  <CardDescription>
+                    Estimated portion:{" "}
+                    {it.count
+                      ? `${it.count} × ${Math.round(
+                          it.gramsPerUnit ?? it.grams / it.count
+                        )} g`
+                      : `${it.grams} g`}{" "}
+                    ({Math.round(it.grams)} g total)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-muted-foreground" htmlFor={`count-${it.id}`}>
+                        Count:
+                      </label>
+                      <input
+                        id={`count-${it.id}`}
+                        type="number"
+                        min={1}
+                        className="h-9 w-24 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={adjustedCount[it.id] ?? it.count ?? 1}
+                        onChange={(e) => {
+                          const v = Math.max(1, Number(e.target.value || 1));
+                          const next = { ...adjustedCount, [it.id]: v };
+                          setAdjustedCount(next);
+                          setNutrition((prev: any) =>
+                            prev ? recalcNutrition(prev, adjustedGrams, next, adjustedGPU) : prev
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-muted-foreground" htmlFor={`gpu-${it.id}`}>
+                        g / unit:
+                      </label>
+                      <input
+                        id={`gpu-${it.id}`}
+                        type="number"
+                        min={0}
+                        className="h-9 w-28 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={adjustedGPU[it.id] ?? it.gramsPerUnit ?? Math.round(it.grams / Math.max(1, it.count || 1))}
+                        onChange={(e) => {
+                          const v = Math.max(0, Number(e.target.value || 0));
+                          const next = { ...adjustedGPU, [it.id]: v };
+                          setAdjustedGPU(next);
+                          setNutrition((prev: any) =>
+                            prev ? recalcNutrition(prev, adjustedGrams, adjustedCount, next) : prev
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-muted-foreground" htmlFor={`grams-${it.id}`}>
+                        Total grams:
+                      </label>
+                      <input
+                        id={`grams-${it.id}`}
+                        type="number"
+                        min={0}
+                        className="h-9 w-28 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={adjustedGrams[it.id] ?? it.grams}
+                        onChange={(e) => {
+                          const v = Math.max(0, Number(e.target.value || 0));
+                          const next = { ...adjustedGrams, [it.id]: v };
+                          setAdjustedGrams(next);
+                          setNutrition((prev: any) =>
+                            prev ? recalcNutrition(prev, next, adjustedCount, adjustedGPU) : prev
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {it.estimated ? (
+                    <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                      <div>
+                        <div className="text-muted-foreground">Calories</div>
+                        <div className="font-medium">
+                          {Math.round(it.estimated.kcal)} kcal
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Protein</div>
+                        <div className="font-medium">
+                          {it.estimated.protein.toFixed(1)} g
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Fat</div>
+                        <div className="font-medium">
+                          {it.estimated.fat.toFixed(1)} g
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Carbs</div>
+                        <div className="font-medium">
+                          {it.estimated.carbs.toFixed(1)} g
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No nutrition match found.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       ) : null}
     </div>
   );

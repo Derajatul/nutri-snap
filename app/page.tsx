@@ -1,10 +1,17 @@
 import { UploadSection } from "@/components/upload-section";
+import { MacroCalculator } from "@/components/macro-calculator";
 
 export default function Home() {
   return (
-    <main className="mx-auto max-w-xl p-6">
-      <h1 className="mb-4 text-2xl font-semibold">Upload Gambar</h1>
-      <UploadSection />
+    <main className="mx-auto max-w-xl p-6 space-y-6">
+      <div>
+        <h1 className="mb-3 text-2xl font-semibold">Kalkulator Harian</h1>
+        <MacroCalculator />
+      </div>
+      <div>
+        <h2 className="mb-4 text-2xl font-semibold">Upload Gambar</h2>
+        <UploadSection />
+      </div>
     </main>
   );
 }
