@@ -19,7 +19,6 @@ type Props = {
 
 export function ImageUploader({
   id,
-  label = "Upload Image",
   accept = "image/*",
   maxSizeMB = 5,
   className,
@@ -81,8 +80,6 @@ export function ImageUploader({
 
   return (
     <div className={cn("w-full space-y-2", className)}>
-      {label ? <Label htmlFor={id}>{label}</Label> : null}
-
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -161,7 +158,7 @@ export function ImageUploader({
           accept={accept}
           className="sr-only"
           onChange={(e) => handleFiles(e.target.files)}
-          aria-label={label}
+          aria-label={"Upload Image"}
         />
       </div>
 

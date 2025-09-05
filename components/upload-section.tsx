@@ -129,6 +129,47 @@ function normalizeGraniteData(obj: any): any {
   }
 }
 
+// Personal targets from Macro Calculator
+type Sex = "male" | "female";
+type Activity = "sedentary" | "light" | "moderate" | "active" | "very";
+type Profile = {
+  weight: number; // kg
+  height: number; // cm
+  age: number; // years
+  sex: Sex;
+  activity: Activity;
+};
+
+const STORAGE_KEY = "nutriSnap.profile.v1";
+
+function bmrCalc({ weight, height, age, sex }: Profile) {
+  // Mifflin-St Jeor
+  const base =
+    10 * weight + 6.25 * height - 5 * age + (sex === "male" ? 5 : -161);
+  return Math.max(500, base);
+}
+
+function activityFactor(a: Activity) {
+  switch (a) {
+    case "sedentary":
+      return 1.2;
+    case "light":
+      return 1.375;
+    case "moderate":
+      return 1.55;
+    case "active":
+      return 1.725;
+    case "very":
+      return 1.9;
+    default:
+      return 1.2;
+  }
+}
+
+function clampNum(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, isFinite(n) ? n : min));
+}
+
 export function UploadSection() {
   const [file, setFile] = React.useState<File | null>(null);
   const [prompt, setPrompt] = React.useState<string>(
@@ -178,6 +219,47 @@ Schema:
   const [adjustedGPU, setAdjustedGPU] = React.useState<Record<number, number>>(
     {}
   );
+
+  // Load personal macro targets from localStorage and compute kcal/protein/fat/carb targets
+  const [targets, setTargets] = React.useState<{
+    kcal: number;
+    proteinG: number;
+    fatG: number;
+    carbG: number;
+  } | null>(null);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const profile: Profile = raw
+        ? {
+            weight: 70,
+            height: 170,
+            age: 25,
+            sex: "male",
+            activity: "moderate",
+            ...JSON.parse(raw),
+          }
+        : {
+            weight: 70,
+            height: 170,
+            age: 25,
+            sex: "male",
+            activity: "moderate",
+          };
+      const kcal = Math.round(
+        bmrCalc(profile) * activityFactor(profile.activity)
+      );
+      const proteinG = clampNum(profile.weight * 1.6, 20, 300);
+      const fatKcal = Math.round(kcal * 0.3);
+      const fatG = Math.max(20, Math.round(fatKcal / 9));
+      const proteinKcal = Math.round(proteinG * 4);
+      const carbKcal = Math.max(0, kcal - proteinKcal - fatKcal);
+      const carbG = Math.max(0, Math.round(carbKcal / 4));
+      setTargets({ kcal, proteinG, fatG, carbG });
+    } catch {
+      // ignore
+    }
+  }, []);
 
   function recalcNutrition(
     base: any,
@@ -311,7 +393,7 @@ Schema:
   return (
     <div className="space-y-4">
       <div>
-        <ImageUploader label="Foto Makanan" onChange={setFile} />
+        <ImageUploader onChange={setFile} />
         {file ? (
           <p className="mt-3 text-sm text-muted-foreground">
             File dipilih: {file.name} ({Math.round(file.size / 1024)} KB)
@@ -358,38 +440,6 @@ Schema:
 
       {nutrition ? (
         <div className="space-y-4">
-          {summary ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Ringkasan</CardTitle>
-                <CardDescription>{summary}</CardDescription>
-              </CardHeader>
-              {advice?.length ? (
-                <CardContent>
-                  <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                    {advice.map((a, i) => (
-                      <li key={i}>{a}</li>
-                    ))}
-                  </ul>
-                </CardContent>
-              ) : null}
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Ringkasan</CardTitle>
-                <CardDescription>
-                  <Skeleton as="span" className="h-4 w-3/4 align-middle" />
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Skeleton as="span" className="block h-3 w-5/6" />
-                  <Skeleton as="span" className="block h-3 w-2/3" />
-                </div>
-              </CardContent>
-            </Card>
-          )}
           <Card>
             <CardHeader>
               <CardTitle>Total Nutrition</CardTitle>
@@ -397,20 +447,22 @@ Schema:
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div className="col-span-2 flex items-center gap-4 sm:col-span-1">
-                  <div>
-                    <div className="text-muted-foreground text-sm">
-                      Calories
-                    </div>
-                    <div className="text-lg font-semibold">
-                      {Math.round(nutrition.total.kcal)} kcal
-                    </div>
-                  </div>
+                <div className="flex items-center justify-center">
+                  <Donut
+                    value={nutrition.total.kcal}
+                    max={
+                      targets?.kcal ??
+                      Math.max(400, Math.ceil(nutrition.total.kcal / 250) * 250)
+                    }
+                    label="Calories"
+                    unit="kcal"
+                    colorClassName="text-rose-600 dark:text-rose-500"
+                  />
                 </div>
                 <div className="flex items-center justify-center">
                   <Donut
                     value={nutrition.total.protein}
-                    max={150}
+                    max={targets?.proteinG ?? 150}
                     label="Protein"
                     unit="g"
                     colorClassName="text-blue-600 dark:text-blue-500"
@@ -419,7 +471,7 @@ Schema:
                 <div className="flex items-center justify-center">
                   <Donut
                     value={nutrition.total.fat}
-                    max={120}
+                    max={targets?.fatG ?? 120}
                     label="Fat"
                     unit="g"
                     colorClassName="text-amber-600 dark:text-amber-500"
@@ -428,15 +480,40 @@ Schema:
                 <div className="flex items-center justify-center">
                   <Donut
                     value={nutrition.total.carbs}
-                    max={300}
+                    max={targets?.carbG ?? 300}
                     label="Carbs"
                     unit="g"
                     colorClassName="text-emerald-600 dark:text-emerald-500"
                   />
                 </div>
               </div>
+
+              <div className="mt-4 space-y-2">
+                {summary ? (
+                  <>
+                    <div className="text-sm font-medium">Ringkasan</div>
+                    <p className="text-sm text-muted-foreground">{summary}</p>
+                    {advice?.length ? (
+                      <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                        {advice.map((a, i) => (
+                          <li key={i}>{a}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <Skeleton as="span" className="block h-3 w-5/6" />
+                    <Skeleton as="span" className="block h-3 w-2/3" />
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
+          <h2 className="text-lg font-semibold">Edit Manual</h2>
+          <p className="text-sm text-muted-foreground -mt-1 mb-2">
+            Sesuaikan jumlah, gram per unit, atau total gram tiap item.
+          </p>
 
           <div className="grid gap-3">
             {nutrition.items?.map((it: any) => (
@@ -591,34 +668,13 @@ Schema:
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Ringkasan</CardTitle>
-              <CardDescription>
-                <Skeleton as="span" className="h-4 w-3/4 align-middle" />
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Skeleton as="span" className="block h-3 w-5/6" />
-                <Skeleton as="span" className="block h-3 w-2/3" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
               <CardTitle>Total Nutrition</CardTitle>
               <CardDescription>Per estimated portions</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div className="col-span-2 flex items-center gap-4 sm:col-span-1">
-                  <div>
-                    <div className="text-muted-foreground text-sm">
-                      Calories
-                    </div>
-                    <div className="text-lg font-semibold">
-                      <Skeleton className="h-6 w-24" />
-                    </div>
-                  </div>
+                <div className="flex items-center justify-center">
+                  <Skeleton className="h-24 w-24 rounded-full" />
                 </div>
                 <div className="flex items-center justify-center">
                   <Skeleton className="h-24 w-24 rounded-full" />
@@ -629,6 +685,10 @@ Schema:
                 <div className="flex items-center justify-center">
                   <Skeleton className="h-24 w-24 rounded-full" />
                 </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                <Skeleton as="span" className="block h-3 w-5/6" />
+                <Skeleton as="span" className="block h-3 w-2/3" />
               </div>
             </CardContent>
           </Card>
