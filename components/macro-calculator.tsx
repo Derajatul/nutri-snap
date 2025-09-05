@@ -1,7 +1,13 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
@@ -41,7 +47,8 @@ function useLocalStorage<T>(key: string, initial: T) {
 
 function bmr({ weight, height, age, sex }: Profile) {
   // Mifflin-St Jeor
-  const base = 10 * weight + 6.25 * height - 5 * age + (sex === "male" ? 5 : -161);
+  const base =
+    10 * weight + 6.25 * height - 5 * age + (sex === "male" ? 5 : -161);
   return Math.max(500, base);
 }
 
@@ -118,13 +125,21 @@ export function MacroCalculator() {
     setProfile({ ...profile, [key]: val });
 
   const reset = () =>
-    setProfile({ weight: 70, height: 170, age: 25, sex: "male", activity: "moderate" });
+    setProfile({
+      weight: 70,
+      height: 170,
+      age: 25,
+      sex: "male",
+      activity: "moderate",
+    });
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Kalkulator Kebutuhan Harian</CardTitle>
-        <CardDescription>Input singkat, hasil disimpan otomatis</CardDescription>
+        <CardDescription>
+          Input singkat, hasil disimpan otomatis
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
@@ -140,7 +155,8 @@ export function MacroCalculator() {
               onChange={(e) => setWeightInput(e.target.value)}
               onBlur={() => commitNumber("weight", weightInput, 20, 300)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") commitNumber("weight", weightInput, 20, 300);
+                if (e.key === "Enter")
+                  commitNumber("weight", weightInput, 20, 300);
               }}
               className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
             />
@@ -157,7 +173,8 @@ export function MacroCalculator() {
               onChange={(e) => setHeightInput(e.target.value)}
               onBlur={() => commitNumber("height", heightInput, 100, 230)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") commitNumber("height", heightInput, 100, 230);
+                if (e.key === "Enter")
+                  commitNumber("height", heightInput, 100, 230);
               }}
               className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
             />

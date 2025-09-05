@@ -160,15 +160,21 @@ Schema:
 }
 `
   );
-  const [loading, setLoading] = React.useState(false);
+  const [loadingPhase, setLoadingPhase] = React.useState<
+    "idle" | "vision" | "nutrition"
+  >("idle");
   const [result, setResult] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [nutrition, setNutrition] = React.useState<any | null>(null);
   const [adjustedGrams, setAdjustedGrams] = React.useState<
     Record<number, number>
   >({});
-  const [adjustedCount, setAdjustedCount] = React.useState<Record<number, number>>({});
-  const [adjustedGPU, setAdjustedGPU] = React.useState<Record<number, number>>({});
+  const [adjustedCount, setAdjustedCount] = React.useState<
+    Record<number, number>
+  >({});
+  const [adjustedGPU, setAdjustedGPU] = React.useState<Record<number, number>>(
+    {}
+  );
 
   function recalcNutrition(
     base: any,
@@ -179,8 +185,16 @@ Schema:
     try {
       if (!base?.items) return base;
       const items = base.items.map((it: any) => {
-        const count = Math.max(1, Math.round(countOverrides?.[it.id] ?? it.count ?? 1));
-        const gramsPerUnit = Math.max(0, gpuOverrides?.[it.id] ?? it.gramsPerUnit ?? Math.max(0, it.grams / Math.max(1, it.count || 1)));
+        const count = Math.max(
+          1,
+          Math.round(countOverrides?.[it.id] ?? it.count ?? 1)
+        );
+        const gramsPerUnit = Math.max(
+          0,
+          gpuOverrides?.[it.id] ??
+            it.gramsPerUnit ??
+            Math.max(0, it.grams / Math.max(1, it.count || 1))
+        );
         const grams = gramsOverrides[it.id] ?? gramsPerUnit * count;
         if (!it.per100g) return { ...it, grams };
         const f = grams / 100;
@@ -209,7 +223,7 @@ Schema:
 
   async function analyze() {
     try {
-      setLoading(true);
+      setLoadingPhase("vision");
       setError(null);
       setResult(null);
       setNutrition(null);
@@ -237,6 +251,7 @@ Schema:
         setResult(pretty);
         // Trigger nutrition mapping
         try {
+          setLoadingPhase("nutrition");
           const nutRes = await fetch("/api/nutrition", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -261,7 +276,7 @@ Schema:
     } catch (e: any) {
       setError(e?.message || "Terjadi kesalahan");
     } finally {
-      setLoading(false);
+      setLoadingPhase("idle");
     }
   }
 
@@ -276,35 +291,42 @@ Schema:
         ) : null}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="granite-prompt">Prompt Granite Vision</Label>
-        <Textarea
-          id="granite-prompt"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          className="min-h-40"
-        />
-      </div>
+      {false && (
+        <div className="space-y-2">
+          <Label htmlFor="granite-prompt">Prompt Granite Vision</Label>
+          <Textarea
+            id="granite-prompt"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="min-h-40"
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
-        <Button onClick={analyze} disabled={loading || !file}>
-          {loading ? "Menganalisis..." : "Analisis dengan Granite Vision"}
+        <Button onClick={analyze} disabled={loadingPhase !== "idle" || !file}>
+          {loadingPhase === "vision"
+            ? "Sedang menganalisis gambar..."
+            : loadingPhase === "nutrition"
+            ? "Sedang menganalisis nutrisi..."
+            : "Analisis Gambar & Nutrisi"}
         </Button>
         {error ? (
           <span className="text-sm text-destructive">{error}</span>
         ) : null}
       </div>
 
-      {result ? (
-        <pre
-          className={cn(
-            "overflow-auto rounded-md border p-3 text-sm",
-            "bg-secondary/50"
-          )}
-        >
-          {result}
-        </pre>
-      ) : null}
+      {false &&
+        (result ? (
+          <pre
+            className={cn(
+              "overflow-auto rounded-md border p-3 text-sm",
+              "bg-secondary/50"
+            )}
+          >
+            {result}
+          </pre>
+        ) : null)}
 
       {nutrition ? (
         <div className="space-y-4">
@@ -317,8 +339,12 @@ Schema:
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="col-span-2 flex items-center gap-4 sm:col-span-1">
                   <div>
-                    <div className="text-muted-foreground text-sm">Calories</div>
-                    <div className="text-lg font-semibold">{Math.round(nutrition.total.kcal)} kcal</div>
+                    <div className="text-muted-foreground text-sm">
+                      Calories
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {Math.round(nutrition.total.kcal)} kcal
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-center">
@@ -370,7 +396,10 @@ Schema:
                 <CardContent>
                   <div className="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
                     <div className="flex items-center gap-2">
-                      <label className="text-muted-foreground" htmlFor={`count-${it.id}`}>
+                      <label
+                        className="text-muted-foreground"
+                        htmlFor={`count-${it.id}`}
+                      >
                         Count:
                       </label>
                       <input
@@ -384,33 +413,57 @@ Schema:
                           const next = { ...adjustedCount, [it.id]: v };
                           setAdjustedCount(next);
                           setNutrition((prev: any) =>
-                            prev ? recalcNutrition(prev, adjustedGrams, next, adjustedGPU) : prev
+                            prev
+                              ? recalcNutrition(
+                                  prev,
+                                  adjustedGrams,
+                                  next,
+                                  adjustedGPU
+                                )
+                              : prev
                           );
                         }}
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-muted-foreground" htmlFor={`gpu-${it.id}`}>
+                      <label
+                        className="text-muted-foreground"
+                        htmlFor={`gpu-${it.id}`}
+                      >
                         g / unit:
                       </label>
                       <input
                         id={`gpu-${it.id}`}
                         type="number"
                         min={0}
-                        className="h-9 w-28 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                        value={adjustedGPU[it.id] ?? it.gramsPerUnit ?? Math.round(it.grams / Math.max(1, it.count || 1))}
+                        className="h-9 w-24 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={
+                          adjustedGPU[it.id] ??
+                          it.gramsPerUnit ??
+                          Math.round(it.grams / Math.max(1, it.count || 1))
+                        }
                         onChange={(e) => {
                           const v = Math.max(0, Number(e.target.value || 0));
                           const next = { ...adjustedGPU, [it.id]: v };
                           setAdjustedGPU(next);
                           setNutrition((prev: any) =>
-                            prev ? recalcNutrition(prev, adjustedGrams, adjustedCount, next) : prev
+                            prev
+                              ? recalcNutrition(
+                                  prev,
+                                  adjustedGrams,
+                                  adjustedCount,
+                                  next
+                                )
+                              : prev
                           );
                         }}
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-muted-foreground" htmlFor={`grams-${it.id}`}>
+                      <label
+                        className="text-muted-foreground"
+                        htmlFor={`grams-${it.id}`}
+                      >
                         Total grams:
                       </label>
                       <input
@@ -424,7 +477,14 @@ Schema:
                           const next = { ...adjustedGrams, [it.id]: v };
                           setAdjustedGrams(next);
                           setNutrition((prev: any) =>
-                            prev ? recalcNutrition(prev, next, adjustedCount, adjustedGPU) : prev
+                            prev
+                              ? recalcNutrition(
+                                  prev,
+                                  next,
+                                  adjustedCount,
+                                  adjustedGPU
+                                )
+                              : prev
                           );
                         }}
                       />
