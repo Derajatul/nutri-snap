@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Donut } from "@/components/ui/donut";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2, Scan, Sparkles } from "lucide-react";
 
 // Sanitize messy JSON-like text from model into valid JSON string
 function sanitizeGraniteJson(rawInput: unknown): {
@@ -415,11 +416,22 @@ Schema:
 
       <div className="flex items-center gap-2">
         <Button onClick={analyze} disabled={loadingPhase !== "idle" || !file}>
-          {loadingPhase === "vision"
-            ? "Sedang menganalisis gambar..."
-            : loadingPhase === "nutrition"
-            ? "Sedang menganalisis nutrisi..."
-            : "Analisis Gambar & Nutrisi"}
+          {loadingPhase !== "idle" ? (
+            <>
+              <Loader2
+                className="mr-2 h-4 w-4 animate-spin"
+                aria-hidden="true"
+              />
+              {loadingPhase === "vision"
+                ? "Sedang menganalisis gambar..."
+                : "Sedang menganalisis nutrisi..."}
+            </>
+          ) : (
+            <>
+              <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
+              Analisis Gambar & Nutrisi
+            </>
+          )}
         </Button>
         {error ? (
           <span className="text-sm text-destructive">{error}</span>
