@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Donut } from "@/components/ui/donut";
 
 // Sanitize messy JSON-like text from model into valid JSON string
 function sanitizeGraniteJson(rawInput: unknown): {
@@ -313,30 +314,39 @@ Schema:
               <CardDescription>Per estimated portions</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                <div>
-                  <div className="text-muted-foreground">Calories</div>
-                  <div className="font-medium">
-                    {Math.round(nutrition.total.kcal)} kcal
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="col-span-2 flex items-center gap-4 sm:col-span-1">
+                  <div>
+                    <div className="text-muted-foreground text-sm">Calories</div>
+                    <div className="text-lg font-semibold">{Math.round(nutrition.total.kcal)} kcal</div>
                   </div>
                 </div>
-                <div>
-                  <div className="text-muted-foreground">Protein</div>
-                  <div className="font-medium">
-                    {nutrition.total.protein.toFixed(1)} g
-                  </div>
+                <div className="flex items-center justify-center">
+                  <Donut
+                    value={nutrition.total.protein}
+                    max={150}
+                    label="Protein"
+                    unit="g"
+                    colorClassName="text-blue-600 dark:text-blue-500"
+                  />
                 </div>
-                <div>
-                  <div className="text-muted-foreground">Fat</div>
-                  <div className="font-medium">
-                    {nutrition.total.fat.toFixed(1)} g
-                  </div>
+                <div className="flex items-center justify-center">
+                  <Donut
+                    value={nutrition.total.fat}
+                    max={120}
+                    label="Fat"
+                    unit="g"
+                    colorClassName="text-amber-600 dark:text-amber-500"
+                  />
                 </div>
-                <div>
-                  <div className="text-muted-foreground">Carbs</div>
-                  <div className="font-medium">
-                    {nutrition.total.carbs.toFixed(1)} g
-                  </div>
+                <div className="flex items-center justify-center">
+                  <Donut
+                    value={nutrition.total.carbs}
+                    max={300}
+                    label="Carbs"
+                    unit="g"
+                    colorClassName="text-emerald-600 dark:text-emerald-500"
+                  />
                 </div>
               </div>
             </CardContent>
