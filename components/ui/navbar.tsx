@@ -16,12 +16,6 @@ export function Navbar() {
           Nutri Snap
         </Link>
         <nav className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Home
-          </Link>
           <Button
             size="sm"
             variant="default"
