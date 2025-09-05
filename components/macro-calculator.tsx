@@ -20,14 +20,18 @@ const STORAGE_KEY = "nutriSnap.profile.v1";
 
 function useLocalStorage<T>(key: string, initial: T) {
   const [state, setState] = React.useState<T>(initial);
+  const loadedRef = React.useRef(false);
+  // Load after mount to avoid SSR/client mismatches
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw) setState({ ...initial, ...JSON.parse(raw) });
+      if (raw) setState((prev) => ({ ...(prev as any), ...JSON.parse(raw) }));
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadedRef.current = true;
   }, [key]);
+  // Save only after initial load
   React.useEffect(() => {
+    if (!loadedRef.current) return;
     try {
       localStorage.setItem(key, JSON.stringify(state));
     } catch {}
@@ -75,13 +79,12 @@ export function MacroCalculator() {
   const [heightInput, setHeightInput] = React.useState<string>(String(170));
   const [ageInput, setAgeInput] = React.useState<string>(String(25));
 
-  // Sync inputs from loaded profile once
+  // Sync inputs whenever profile changes (e.g., after loading from localStorage)
   React.useEffect(() => {
     setWeightInput(String(profile.weight));
     setHeightInput(String(profile.height));
     setAgeInput(String(profile.age));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [profile.weight, profile.height, profile.age]);
 
   const commitNumber = (
     kind: "weight" | "height" | "age",
