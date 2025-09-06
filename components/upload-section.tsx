@@ -466,7 +466,7 @@ Schema:
                       targets?.kcal ??
                       Math.max(400, Math.ceil(nutrition.total.kcal / 250) * 250)
                     }
-                    label="Calories"
+                    label="Kalori"
                     unit="kcal"
                     colorClassName="text-rose-600 dark:text-rose-500"
                   />
@@ -484,7 +484,7 @@ Schema:
                   <Donut
                     value={nutrition.total.fat}
                     max={targets?.fatG ?? 120}
-                    label="Fat"
+                    label="Lemak"
                     unit="g"
                     colorClassName="text-amber-600 dark:text-amber-500"
                   />
@@ -493,7 +493,7 @@ Schema:
                   <Donut
                     value={nutrition.total.carbs}
                     max={targets?.carbG ?? 300}
-                    label="Carbs"
+                    label="Karbohidrat"
                     unit="g"
                     colorClassName="text-emerald-600 dark:text-emerald-500"
                   />
