@@ -65,7 +65,12 @@ export const metadata: Metadata = {
     images: ["/globe.svg"],
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: ["/favicon.svg"],
+    apple: ["/icon-192.png"],
   },
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
@@ -91,13 +96,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-  <html lang="en">
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Navbar />
-  <PWARegister />
-  <div className="min-h-[calc(100dvh-56px-64px)]">{children}</div>
+        <PWARegister />
+        <div className="min-h-[calc(100dvh-56px-64px)]">{children}</div>
         <Footer />
       </body>
     </html>
