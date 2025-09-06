@@ -1,0 +1,24 @@
+---
+config:
+  theme: base
+  themeVariables:
+    textColor: "#E6EDF3"
+    primaryTextColor: "#E6EDF3"
+  layout: dagre
+---
+flowchart LR
+    U["User pilih / drop image"] --> S["Set file state"]
+    S --> A{"Klik Analisis"}
+    A -- No file --> Err["Error ditampilkan"]
+    A -- OK --> V["POST /api/vision"]
+    V --> Clean["Sanitize + Normalize"]
+    Clean --> Nut["POST /api/nutrition"]
+    Nut --> Tot["Hitung total"]
+    Tot --> UI["Render donut + skeleton"]
+    UI --> SumReq["Request /api/describe"] & Edit["Edit manual"]
+    SumReq --> SumRes["Summary + Advice"]
+    Edit --> Recalc["Recalc totals"]
+    Recalc --> UI
+    LS["LocalStorage profile"] --> Targets["Target harian"]
+    Targets --> UI
+    SW["Service Worker"] --> Cache["Cache aset"]
