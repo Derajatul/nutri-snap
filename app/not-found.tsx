@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 // Custom 404 page (App Router not-found.tsx)
 export default function NotFound() {
@@ -9,7 +15,9 @@ export default function NotFound() {
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="text-2xl">Halaman Tidak Ditemukan</CardTitle>
-          <CardDescription>Kami tidak menemukan halaman yang kamu minta.</CardDescription>
+          <CardDescription>
+            Kami tidak menemukan halaman yang kamu minta.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -29,9 +37,7 @@ export default function NotFound() {
           </div>
         </CardContent>
       </Card>
-      <div className="mt-6 text-xs text-muted-foreground">
-        404 • Nutri Snap
-      </div>
+      <div className="mt-6 text-xs text-muted-foreground">404 • Nutri Snap</div>
     </main>
   );
 }
